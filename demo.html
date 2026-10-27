@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Alura AI 2API Demo</title>
+<style>
+:root{--bg:#0e1117;--card:#1a2030;--acc:#7c6cf0;--acc2:#38c7b0;--tx:#e8ecf4;--mut:#8b93a7}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--tx);font-family:"Segoe UI",system-ui,sans-serif;padding:24px;max-width:960px;margin:auto}
+h1{font-size:22px;margin-bottom:4px}
+.sub{color:var(--mut);font-size:13px;margin-bottom:20px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.card{background:var(--card);border:1px solid #2a3145;border-radius:12px;padding:16px}
+.card h2{font-size:15px;margin-bottom:10px;color:var(--acc)}
+.card.full{grid-column:1/-1}
+textarea,input{width:100%;background:#0e1117;border:1px solid #2a3145;color:var(--tx);border-radius:8px;padding:10px;font-size:13px}
+textarea{min-height:70px;resize:vertical}
+button{background:var(--acc);border:0;color:#fff;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:14px;margin-top:10px}
+button:disabled{opacity:.5}
+button.alt{background:var(--acc2)}
+.row{display:flex;gap:10px;margin-top:8px}
+.out{margin-top:10px;background:#0e1117;border:1px solid #2a3145;border-radius:8px;padding:10px;font-size:13px;white-space:pre-wrap;word-break:break-all;max-height:260px;overflow:auto}
+img.result{max-width:100%;border-radius:8px;margin-top:10px}
+.badge{font-size:11px;padding:2px 8px;border-radius:10px;background:#2a3145;color:var(--mut)}
+.badge.ok{background:#1d4034;color:#4ade80}
+.badge.bad{background:#4a2230;color:#f87171}
+label{font-size:12px;color:var(--mut)}
+</style>
+</head>
+<body>
+<h1>Alura AI 2API <span class="badge">com.lightsail.alurachat 1.5.7</span></h1>
+<div class="sub">Groq chat (gpt-oss-20b) · Qwen-Editing 图像编辑 · image-2-video · ModelSLab t2i(过期)</div>
+
+<div class="grid">
+  <div class="card full">
+    <h2>💬 Chat <span class="badge ok">已打通</span></h2>
+    <textarea id="chatIn">用三个词介绍一下你自己</textarea>
+    <div class="row"><button onclick="chat()">发送 (POST /v1/chat/completions)</button></div>
+    <div class="out" id="chatOut">—</div>
+  </div>
+
+  <div class="card">
+    <h2>🖼️ 图像编辑 <span class="badge ok">已打通</span></h2>
+    <label>上传图片 (jpg)</label><br>
+    <input type="file" id="imgFile" accept="image/jpeg,image/png">
+    <textarea id="imgPrompt">turn the background into a starry night sky</textarea>
+    <button class="alt" onclick="imgEdit()">生成 (presign→S3→qwen-editing)</button>
+    <div class="out" id="imgOut">—</div>
+    <div id="imgWrap"></div>
+  </div>
+
+  <div class="card">
+    <h2>🎬 图生视频 <span class="badge">presign 已打通</span></h2>
+    <label>上传图片 (jpg)</label><br>
+    <input type="file" id="vidFile" accept="image/jpeg,image/png">
+    <textarea id="vidPrompt">cinematic slow zoom, gentle motion</textarea>
+    <button onclick="videoGen()">提交任务 (POST /alura/video)</button>
+    <div class="out" id="vidOut">—</div>
+  </div>
+
+  <div class="card full">
+    <h2>🌅 文生图 ModelSLab <span class="badge bad">企业 plan 已过期</span></h2>
+    <textarea id="t2iIn" style="min-height:40px">a red sports car</textarea>
+    <button onclick="t2i()">试一发 (仅协议验证)</button>
+    <div class="out" id="t2iOut">—</div>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+async function post(path,obj){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(obj)});return {code:r.status,data:await r.json()};}
+function fileB64(f){return new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.readAsDataURL(f);});}
+
+async function chat(){
+  $('chatOut').textContent='...';
+  const {code,data}=await post('/v1/chat/completions',{messages:[{role:'user',content:$('chatIn').value}]});
+  $('chatOut').textContent=code==200?(data.choices?.[0]?.message?.content||JSON.stringify(data)):('HTTP '+code+' '+JSON.stringify(data));
+}
+async function imgEdit(){
+  const f=$('imgFile').files[0]; if(!f)return alert('先选图');
+  $('imgOut').textContent='presign→上传→生成中(约10-40s)...';
+  const {code,data}=await post('/alura/image/edit',{image_base64:await fileB64(f),prompt:$('imgPrompt').value});
+  $('imgOut').textContent='HTTP '+code+' '+JSON.stringify(data);
+  if(data.url){$('imgWrap').innerHTML='<img class="result" src="'+data.url+'">';}
+}
+async function videoGen(){
+  const f=$('vidFile').files[0]; if(!f)return alert('先选图');
+  $('vidOut').textContent='提交中...';
+  const {code,data}=await post('/alura/video',{image_base64:await fileB64(f),prompt:$('vidPrompt').value});
+  $('vidOut').textContent='HTTP '+code+' '+JSON.stringify(data,null,1);
+}
+async function t2i(){
+  $('t2iOut').textContent='...';
+  const {code,data}=await post('/alura/txt2img',{prompt:$('t2iIn').value});
+  $('t2iOut').textContent='HTTP '+code+' '+JSON.stringify(data);
+}
+</script>
+</body>
+</html>
